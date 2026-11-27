@@ -14,7 +14,6 @@ on:
         type: choice
         options:
           - smoke
-          - regression
           - test
         default: smoke
       test_filter:
@@ -44,15 +43,24 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
     - name: Verify required secrets
-      if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'regression' || inputs.suite == 'test'))
+      if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'test')
       run: |
         test -n "$WEBSITE_USER" || { echo "::error::Add WEBSITE_USER in GitHub Actions secrets."; exit 1; }
         test -n "$WEBSITE_PASSWORD" || { echo "::error::Add WEBSITE_PASSWORD in GitHub Actions secrets."; exit 1; }
-    - name: Run smoke tests for pull requests
-      if: github.event_name == 'pull_request'
+        if [ "$GITHUB_EVENT_NAME" = "schedule" ]; then
+          test -n "$GMAIL_USERNAME" || { echo "::error::Add GMAIL_USERNAME in GitHub Actions secrets."; exit 1; }
+          test -n "$GMAIL_APP_PASSWORD" || { echo "::error::Add GMAIL_APP_PASSWORD in GitHub Actions secrets."; exit 1; }
+          test -n "$REPORT_EMAIL_TO" || { echo "::error::Add REPORT_EMAIL_TO in GitHub Actions secrets."; exit 1; }
+        fi
+      env:
+        GMAIL_USERNAME: ${{ secrets.GMAIL_USERNAME }}
+        GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        REPORT_EMAIL_TO: ${{ secrets.REPORT_EMAIL_TO }}
+    - name: Run smoke tests for pull requests and pushes
+      if: github.event_name == 'pull_request' || github.event_name == 'push'
       run: npx playwright test tests/specs --workers=1 --grep "@smoke"
     - name: Run full regression suite
-      if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'regression')
+      if: github.event_name == 'schedule'
       run: npx playwright test tests/specs --workers=1
     - name: Run selected test(s)
       if: github.event_name == 'workflow_dispatch' && inputs.suite == 'test'
@@ -67,9 +75,37 @@ jobs:
     - name: Run smoke suite manually
       if: github.event_name == 'workflow_dispatch' && inputs.suite == 'smoke'
       run: npx playwright test tests/specs --workers=1 --grep "@smoke"
+    - name: Archive scheduled regression report
+      if: always() && github.event_name == 'schedule'
+      run: |
+        if [ -d playwright-report ]; then
+          zip -qr playwright-report.zip playwright-report
+        else
+          mkdir -p playwright-report
+          printf 'Playwright did not generate an HTML report. Check the workflow run logs.\n' > playwright-report/README.txt
+          zip -qr playwright-report.zip playwright-report
+        fi
     - uses: actions/upload-artifact@v7.0.2
       if: ${{ !cancelled() }}
       with:
         name: playwright-report
         path: playwright-report/
         retention-days: 30
+    - name: Email scheduled regression result
+      if: always() && github.event_name == 'schedule'
+      uses: dawidd6/action-send-mail@v24
+      with:
+        server_address: smtp.gmail.com
+        server_port: 465
+        secure: true
+        username: ${{ secrets.GMAIL_USERNAME }}
+        password: ${{ secrets.GMAIL_APP_PASSWORD }}
+        subject: 'Playwright full regression: ${{ job.status }} - ${{ github.repository }}'
+        to: ${{ secrets.REPORT_EMAIL_TO }}
+        from: ${{ secrets.GMAIL_USERNAME }}
+        body: |
+          Scheduled Playwright full regression finished with status: ${{ job.status }}.
+
+          Workflow run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          The compressed HTML report is attached and is also available as a workflow artifact.
+        attachments: playwright-report.zip
