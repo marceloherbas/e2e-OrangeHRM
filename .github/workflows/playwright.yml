@@ -4,6 +4,23 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
+  schedule:
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Test suite to run
+        required: true
+        type: choice
+        options:
+          - smoke
+          - regression
+          - test
+        default: smoke
+      test_filter:
+        description: Optional Playwright grep filter (for suite 'test', e.g. TC-001)
+        required: false
+        type: string
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -27,11 +44,29 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
     - name: Verify required secrets
+      if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'regression' || inputs.suite == 'test'))
       run: |
         test -n "$WEBSITE_USER" || { echo "::error::Add WEBSITE_USER in GitHub Actions secrets."; exit 1; }
         test -n "$WEBSITE_PASSWORD" || { echo "::error::Add WEBSITE_PASSWORD in GitHub Actions secrets."; exit 1; }
-    - name: Run Playwright tests
+    - name: Run smoke tests for pull requests
+      if: github.event_name == 'pull_request'
+      run: npx playwright test tests/specs --workers=1 --grep "@smoke"
+    - name: Run full regression suite
+      if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'regression')
       run: npx playwright test tests/specs --workers=1
+    - name: Run selected test(s)
+      if: github.event_name == 'workflow_dispatch' && inputs.suite == 'test'
+      env:
+        TEST_FILTER: ${{ inputs.test_filter }}
+      run: |
+        if [ -z "$TEST_FILTER" ]; then
+          echo "::error::Enter a test_filter such as TC-001 or a test title."
+          exit 1
+        fi
+        npx playwright test tests/specs --workers=1 --grep "$TEST_FILTER"
+    - name: Run smoke suite manually
+      if: github.event_name == 'workflow_dispatch' && inputs.suite == 'smoke'
+      run: npx playwright test tests/specs --workers=1 --grep "@smoke"
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:
