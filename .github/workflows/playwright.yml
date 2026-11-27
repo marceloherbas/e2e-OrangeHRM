@@ -14,7 +14,6 @@ on:
         type: choice
         options:
           - smoke
-          - regression
           - test
         default: smoke
       test_filter:
@@ -44,15 +43,15 @@ jobs:
     - name: Install Playwright Browsers
       run: npx playwright install --with-deps chromium
     - name: Verify required secrets
-      if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && (inputs.suite == 'regression' || inputs.suite == 'test'))
+      if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'test')
       run: |
         test -n "$WEBSITE_USER" || { echo "::error::Add WEBSITE_USER in GitHub Actions secrets."; exit 1; }
         test -n "$WEBSITE_PASSWORD" || { echo "::error::Add WEBSITE_PASSWORD in GitHub Actions secrets."; exit 1; }
-    - name: Run smoke tests for pull requests
-      if: github.event_name == 'pull_request'
+    - name: Run smoke tests for pull requests and pushes
+      if: github.event_name == 'pull_request' || github.event_name == 'push'
       run: npx playwright test tests/specs --workers=1 --grep "@smoke"
     - name: Run full regression suite
-      if: github.event_name == 'push' || github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.suite == 'regression')
+      if: github.event_name == 'schedule'
       run: npx playwright test tests/specs --workers=1
     - name: Run selected test(s)
       if: github.event_name == 'workflow_dispatch' && inputs.suite == 'test'
