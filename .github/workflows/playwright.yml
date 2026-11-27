@@ -8,6 +8,10 @@ jobs:
   test:
     timeout-minutes: 60
     runs-on: ubuntu-latest
+    env:
+      WEBSITE_URL: ${{ vars.WEBSITE_URL || 'https://opensource-demo.orangehrmlive.com/' }}
+      WEBSITE_USER: ${{ secrets.WEBSITE_USER }}
+      WEBSITE_PASSWORD: ${{ secrets.WEBSITE_PASSWORD }}
     steps:
     - name: Clone repository
       uses: actions/checkout@v4
@@ -18,9 +22,13 @@ jobs:
     - name: Install dependencies
       run: npm ci
     - name: Install Playwright Browsers
-      run: npx playwright install --with-deps
+      run: npx playwright install --with-deps chromium
+    - name: Verify required secrets
+      run: |
+        test -n "$WEBSITE_USER" || { echo "::error::Add WEBSITE_USER in GitHub Actions secrets."; exit 1; }
+        test -n "$WEBSITE_PASSWORD" || { echo "::error::Add WEBSITE_PASSWORD in GitHub Actions secrets."; exit 1; }
     - name: Run Playwright tests
-      run: npx playwright test
+      run: npx playwright test tests/specs --workers=1
     - uses: actions/upload-artifact@v4
       if: ${{ !cancelled() }}
       with:

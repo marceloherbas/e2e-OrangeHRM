@@ -86,8 +86,10 @@ export class OrangeHRMAdminPage {
     const roleDropdownContainer = this.page.locator('.oxd-select-text').first();
     await roleDropdownContainer.waitFor({ state: 'visible', timeout: 10000 });
     await roleDropdownContainer.scrollIntoViewIfNeeded();
-    await roleDropdownContainer.click({ force: true });
-    await this.page.getByRole('option', { name: newRole, exact: true }).click();
+    await roleDropdownContainer.click();
+    const roleOption = this.page.locator('.oxd-select-option').filter({ hasText: newRole });
+    await roleOption.waitFor({ state: 'visible', timeout: 10000 });
+    await roleOption.click();
 
     const saveButtons = this.page.getByRole('button', { name: 'Save' });
     await saveButtons.last().click();
