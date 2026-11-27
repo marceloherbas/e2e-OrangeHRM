@@ -8,7 +8,10 @@ test.describe('Test group', () => {
     const adminPage = new OrangeHRMAdminPage(page);
 
     await loginPage.goto(); // Asegúrate de incluir la navegación si es necesario
-    await loginPage.login('Admin', 'admin123');
+    await loginPage.login(
+      process.env.WEBSITE_USER as string,
+      process.env.WEBSITE_PASSWORD as string
+    );
     await expect(page).toHaveURL(/.*dashboard.*/);
     await expect(loginPage.dashboardHeading).toBeVisible();
   });
