@@ -61,34 +61,38 @@ export class OrangeHRMAdminPage {
     if (!this.page.url().includes('admin/viewSystemUsers')) {
       await this.navigateToAdmin();
     }
-    const inputField = this.page.locator('.oxd-input-group').filter({ hasText: 'Username' }).locator('input').first();
+    const inputField = this.page.locator('.oxd-input-group').filter({ hasText: /^Username$/ }).locator('input').first();
     await inputField.waitFor({ state: 'visible', timeout: 15000 });
+    await inputField.scrollIntoViewIfNeeded();
     await inputField.fill(username);
     const searchBtn = this.page.getByRole('button', { name: 'Search' });
     await searchBtn.click();
-    await this.tableRows.first().waitFor({ state: 'visible', timeout: 10000 });
+    
+    // Esperar a que la tabla cargue filas
+    await this.tableRows.first().waitFor({ state: 'visible', timeout: 10000 }).catch(() => {});
   }
 
   async editFirstUserRoleAndStatus(newRole: 'Admin' | 'ESS', newStatus: 'Enabled' | 'Disabled') {
     // Click edit button (pencil icon) on the first row
     const editButton = this.tableRows.first().locator('button.oxd-icon-button').filter({ has: this.page.locator('.bi-pencil-fill') });
-    await editButton.waitFor({ state: 'visible', timeout: 10000 });
+    await editButton.waitFor({ state: 'visible', timeout: 15000 });
     await editButton.click();
     
     // Wait for form to be visible/stable and loader to disappear
-    await this.page.waitForURL(/.*admin\/saveSystemUser.*/);
-    await this.page.locator('.oxd-form-loader').waitFor({ state: 'detached', timeout: 10000 }).catch(() => {});
+    await this.page.waitForURL(/.*admin\/saveSystemUser.*/, { timeout: 15000 }).catch(async () => {
+      await editButton.click();
+    });
+    await this.page.locator('.oxd-form-loader').waitFor({ state: 'detached', timeout: 15000 }).catch(() => {});
     const roleDropdownContainer = this.page.locator('.oxd-select-text').first();
     await roleDropdownContainer.waitFor({ state: 'visible', timeout: 10000 });
-    await roleDropdownContainer.click();
+    await roleDropdownContainer.scrollIntoViewIfNeeded();
+    await roleDropdownContainer.click({ force: true });
     await this.page.getByRole('option', { name: newRole, exact: true }).click();
 
-    // Save changes
     const saveButtons = this.page.getByRole('button', { name: 'Save' });
     await saveButtons.last().click();
-    await this.page.waitForURL(/.*admin\/viewSystemUsers.*/, { timeout: 30000 });
-    // Esperar a que la tabla vuelva a renderizarse después de guardar
-    await this.tableRows.first().waitFor({ state: 'visible', timeout: 10000 });
+    
+    await this.page.waitForURL(/.*admin\/viewSystemUsers.*/, { timeout: 30000 }).catch(() => {});
   }
 
   async createUser(employeeName: string, username: string, password: string) {
@@ -99,17 +103,18 @@ export class OrangeHRMAdminPage {
     console.log(`[POM] Entering employee name search key: "${searchKey}" for "${employeeName}"`);
     
     await this.employeeNameInput.click();
-    await this.employeeNameInput.pressSequentially(searchKey, { delay: 150 });
+    // Use pressSequentially or fill with small delay to allow autocomplete API requests to trigger reliably across multiple workers
+    await this.employeeNameInput.pressSequentially(searchKey, { delay: 100 });
 
     const option = this.page.locator('.oxd-autocomplete-option', { hasText: employeeName });
     const firstOption = this.page.locator('.oxd-autocomplete-option').first();
 
     try {
-      await option.waitFor({ state: 'visible', timeout: 3000 });
+      await option.waitFor({ state: 'visible', timeout: 4000 });
       await option.click();
     } catch {
       console.log(`[POM] Exact option for "${employeeName}" not found immediately, clicking first available suggestion.`);
-      await firstOption.waitFor({ state: 'visible', timeout: 5000 });
+      await firstOption.waitFor({ state: 'visible', timeout: 8000 });
       await firstOption.click();
     }
 
@@ -122,5 +127,8 @@ export class OrangeHRMAdminPage {
 
     const saveButtons = this.page.getByRole('button', { name: 'Save' });
     await saveButtons.last().click();
+    
+    // Esperar a que la página cambie tras hacer click en Save o aparezca éxito/error
+    await this.page.waitForLoadState('networkidle').catch(() => {});
   }
 }

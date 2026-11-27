@@ -20,10 +20,11 @@ export class OrangeHRMLoginPage {
   }
 
   async goto() {
-    await this.page.goto('/');
+    await this.page.goto('/', { waitUntil: 'domcontentloaded', timeout: 60000 });
   }
 
   async login(username: string, password: string) {
+    await this.usernameInput.waitFor({ state: 'visible', timeout: 15000 });
     await this.usernameInput.fill(username);
     await this.passwordInput.fill(password);
     await this.loginButton.click();

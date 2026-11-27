@@ -3,7 +3,11 @@
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
-  "scripts": {},
+  "scripts": {
+    "test": "npx playwright test --workers=2",
+    "test:all": "npx playwright test",
+    "heal": "node scripts/heal-tests.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
@@ -12,5 +16,8 @@
     "@playwright/mcp": "^0.0.83",
     "@playwright/test": "^1.64.0",
     "@types/node": "^26.6.5"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.8"
   }
 }
